@@ -15,7 +15,7 @@
 def get_resolution(original_resolution):
   """Takes (H,W) and returns (precrop, crop)."""
   area = original_resolution[0] * original_resolution[1]
-  return (160, 128) if area < 96*96 else (512, 480)
+  return (160, 128) if area < 96*96 else (256, 240)
 
 
 known_dataset_sizes = {
@@ -24,12 +24,13 @@ known_dataset_sizes = {
   'oxford_iiit_pet': (224, 224),
   'oxford_flowers102': (224, 224),
   'imagenet2012': (224, 224),
+  'custom': (224, 224),
 }
 
 
 def get_resolution_from_dataset(dataset):
   if dataset not in known_dataset_sizes:
-    raise ValueError(f"Unsupported dataset {dataset}. Add your own here :)")
+    return get_resolution(known_dataset_sizes['custom'])
   return get_resolution(known_dataset_sizes[dataset])
 
 
@@ -40,6 +41,10 @@ def get_mixup(dataset_size):
 def get_schedule(dataset_size):
   if dataset_size < 20_000:
     return [100, 200, 300, 400, 500]
+  elif dataset_size < 100_000:
+    return [500, 1000, 1500, 2000, 2500]
+  elif dataset_size < 200_000:
+    return [1000, 2000, 3000, 4000, 5000]
   elif dataset_size < 500_000:
     return [500, 3000, 6000, 9000, 10_000]
   else:
