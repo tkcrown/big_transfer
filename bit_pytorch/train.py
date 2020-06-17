@@ -29,6 +29,8 @@ import bit_pytorch.models as models
 
 import bit_common
 import bit_hyperrule
+from .data.train_val_dataset_builder import TrainValDatasetBuilder
+from sklearn.metrics import average_precision_score
 
 
 def topk(output, target, ks=(1,)):
@@ -72,10 +74,8 @@ def mktrainval(args, logger):
     train_set = tv.datasets.ImageFolder(pjoin(args.datadir, "train"), train_tx)
     valid_set = tv.datasets.ImageFolder(pjoin(args.datadir, "val"), val_tx)
   else:
-    raise ValueError(f"Sorry, we have not spent time implementing the "
-                     f"{args.dataset} dataset in the PyTorch codebase. "
-                     f"In principle, it should be easy to add :)")
-
+    train_set, valid_set = TrainValDatasetBuilder.create_train_and_val_data(args.datadir, args.trainpath, args.valpath, train_tx, val_tx)
+    
   if args.examples_per_class is not None:
     logger.info(f"Looking for {args.examples_per_class} images per class...")
     indices = fs.find_fewshot_indices(train_set, args.examples_per_class)
@@ -104,6 +104,10 @@ def mktrainval(args, logger):
 
   return train_set, valid_set, train_loader, valid_loader
 
+def one_hot_vec(c_idx, length):
+  vec = [0.0] * length
+  vec[c_idx] = 1
+  return vec
 
 def run_eval(model, data_loader, device, chrono, logger, step):
   # switch to evaluate mode
@@ -114,6 +118,8 @@ def run_eval(model, data_loader, device, chrono, logger, step):
 
   all_c, all_top1, all_top5 = [], [], []
   end = time.time()
+  y_scores = []
+  y_trues = []
   for b, (x, y) in enumerate(data_loader):
     with torch.no_grad():
       x = x.to(device, non_blocking=True)
@@ -130,6 +136,10 @@ def run_eval(model, data_loader, device, chrono, logger, step):
         all_c.extend(c.cpu())  # Also ensures a sync point.
         all_top1.extend(top1.cpu())
         all_top5.extend(top5.cpu())
+        probs = torch.nn.functional.softmax(logits, dim=1).cpu().numpy()
+        n_class = probs.shape[1]
+        y_scores.extend(probs)
+        y_trues.extend([one_hot_vec(c_idx, n_class) for c_idx in y])
 
     # measure elapsed time
     end = time.time()
@@ -137,7 +147,8 @@ def run_eval(model, data_loader, device, chrono, logger, step):
   model.train()
   logger.info(f"Validation@{step} loss {np.mean(all_c):.5f}, "
               f"top1 {np.mean(all_top1):.2%}, "
-              f"top5 {np.mean(all_top5):.2%}")
+              f"top5 {np.mean(all_top5):.2%}, "
+              f"AP {average_precision_score(y_trues, y_scores):.2%}")
   logger.flush()
   return all_c, all_top1, all_top5
 
@@ -284,4 +295,9 @@ if __name__ == "__main__":
   parser.add_argument("--workers", type=int, default=8,
                       help="Number of background threads used to load data.")
   parser.add_argument("--no-save", dest="save", action="store_false")
+
+  parser.add_argument("--trainpath",
+                      help="Path to train images.")
+  parser.add_argument("--valpath",
+                      help="Path to test images.")
   main(parser.parse_args())
