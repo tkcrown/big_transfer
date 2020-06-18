@@ -74,7 +74,10 @@ def mktrainval(args, logger):
     train_set = tv.datasets.ImageFolder(pjoin(args.datadir, "train"), train_tx)
     valid_set = tv.datasets.ImageFolder(pjoin(args.datadir, "val"), val_tx)
   else:
-    train_set, valid_set = TrainValDatasetBuilder.create_train_and_val_data(args.datadir, args.trainpath, args.valpath, train_tx, val_tx)
+    if args.dataformat == 'class_dir':
+      train_set, valid_set = TrainValDatasetBuilder.create_train_and_val_data_dir(args.datadir, args.trainpath, args.valpath, train_tx, val_tx)
+    else:
+      train_set, valid_set = TrainValDatasetBuilder.create_train_and_val_data_with_index_file(args.datadir, args.trainpath, args.valpath, args.classfile, train_tx, val_tx)
     
   if args.examples_per_class is not None:
     logger.info(f"Looking for {args.examples_per_class} images per class...")
@@ -300,4 +303,8 @@ if __name__ == "__main__":
                       help="Path to train images.")
   parser.add_argument("--valpath",
                       help="Path to test images.")
+  parser.add_argument("--classfile",
+                      help="file name of classes.")
+  parser.add_argument("--dataformat",
+                      help="class_dir or index_file.")
   main(parser.parse_args())
